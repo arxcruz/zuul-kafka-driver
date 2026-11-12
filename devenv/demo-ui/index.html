@@ -130,8 +130,8 @@ select { font: inherit; background: var(--code); color: var(--ink);
   <h1>Zuul &times; Kafka</h1>
   <span class="sub">Publish a message to Kafka and watch Zuul run the jobs it triggers</span>
   <nav>
-    <a href="http://localhost:9000/t/example-tenant/status" target="_blank">Zuul status</a>
-    <a href="http://localhost:9000/t/example-tenant/builds" target="_blank">Zuul builds</a>
+    <a id="nav-status" href="#" target="_blank">Zuul status</a>
+    <a id="nav-builds" href="#" target="_blank">Zuul builds</a>
   </nav>
 </header>
 
@@ -214,7 +214,11 @@ select { font: inherit; background: var(--code); color: var(--ink);
 <div class="toast" id="toast"></div>
 
 <script>
-const ZUUL = 'http://localhost:9000/t/example-tenant';
+// Zuul web is on port 9000 of the same host the page was opened with, so
+// links work from other computers too.
+const ZUUL = `${location.protocol}//${location.hostname}:9000/t/example-tenant`;
+document.getElementById('nav-status').href = `${ZUUL}/status`;
+document.getElementById('nav-builds').href = `${ZUUL}/builds`;
 const SCENARIOS = [
   ['build', 'New build announced', 'event build-requested → kafka-build: hello-kafka, lint, then deploy-preview. Everything passes.'],
   ['broken', 'Broken build announced', 'event build-broken → kafka-build-broken: hello-kafka fails, so deploy-preview is skipped.'],

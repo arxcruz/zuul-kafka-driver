@@ -47,6 +47,8 @@ which prints *hey mom! i ran with kafka!*. To try the bundle scenario, click
 **Send** under "Announce a new bundle", wait for it to finish, then click
 **Re-run failed** in the Bundles grid.
 
+The demo is also reachable from **other computers on the same network**, which is handy when presenting from another machine. `deploy.sh` prints the URLs (for example `http://192.168.1.20:8080`). It uses the IP of the interface with the default route; set `DEMO_HOST` to override it, for example `DEMO_HOST=mybox.local ./deploy.sh`. The demo UI and the job-log links use that address. Kafka's host port (`29092`) is advertised as `localhost`, so external producers only work from this machine.
+
 ```sh
 ./demo.sh                  # guided walkthrough in the terminal (for presentations)
 ./clean.sh                 # remove containers, volumes, images and the Zuul source

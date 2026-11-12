@@ -16,4 +16,4 @@
       zuul_return:
         data:
           zuul:
-            log_url: "http://localhost:8000/{{ zuul.build }}/"
+            log_url: "http://{{ demo_host | default('localhost') }}:8000/{{ zuul.build }}/"

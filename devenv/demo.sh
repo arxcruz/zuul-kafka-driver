@@ -248,7 +248,11 @@ print("    drivers[\"kafka\"] = %s.%s" % (type(d).__module__, type(d).__name__))
     pause
 
     title "Thanks!"
-    say "Try it yourself: $UI"
+    if [ "$DEMO_HOST" != localhost ]; then
+        say "Try it yourself: http://$DEMO_HOST:8080"
+    else
+        say "Try it yourself: $UI"
+    fi
     say ""
     say "Next steps:"
     say "  • pass the message data (e.g. build_id) to jobs as variables"

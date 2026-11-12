@@ -16,6 +16,22 @@ UI=http://localhost:8080
 ZUUL=http://localhost:9000/t/example-tenant
 LOGS=http://localhost:8000
 
+# The address other computers on the network use to reach the demo.
+# Set DEMO_HOST to override (e.g. a hostname); defaults to the IP of the
+# interface with the default route.
+lan_ip() {
+    if [ "$(uname)" = Darwin ]; then
+        local iface
+        iface=$(route -n get default 2>/dev/null | awk '/interface:/ {print $2}')
+        [ -n "$iface" ] && ipconfig getifaddr "$iface" 2>/dev/null
+    else
+        ip route get 1.1.1.1 2>/dev/null |
+            awk '{for (i = 1; i < NF; i++) if ($i == "src") print $(i + 1)}'
+    fi
+}
+DEMO_HOST=${DEMO_HOST:-$(lan_ip || true)}
+DEMO_HOST=${DEMO_HOST:-localhost}
+
 # Images built for the demo, and images pulled to build or run it.
 BUILT_IMAGES="localhost/zuul-kafka-dev:latest
 localhost/zuul-kafka-executor-dev:latest
