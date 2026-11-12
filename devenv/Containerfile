@@ -1,0 +1,14 @@
+# Upstream Zuul image plus the Kafka driver.  All Zuul components use the
+# same base image and only differ by command, so one image serves the
+# scheduler, merger and web.
+ARG ZUUL_IMAGE=quay.io/zuul-ci/zuul-scheduler:latest
+FROM ${ZUUL_IMAGE}
+
+COPY . /tmp/zuul-kafka-driver
+RUN pip install --no-cache-dir /tmp/zuul-kafka-driver \
+  && rm -rf /tmp/zuul-kafka-driver \
+  && python -c "import importlib.metadata as m; \
+assert [e for e in m.entry_points(group='zuul.drivers') if e.name == 'kafka']" \
+  && ls "$(python -c 'import sysconfig; print(sysconfig.get_path("purelib"))')/zuul_kafka_driver.pth" \
+# The git repos in /srv/git are created by the git-init container.
+  && git config --system --add safe.directory '*'

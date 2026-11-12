@@ -1,0 +1,50 @@
+# Steps are loops with a pause between items so that each line shows up
+# in the live console as it happens.
+- hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Say hi
+      debug:
+        msg: "hey mom! i ran with kafka!"
+
+    - name: Show where this came from
+      debug:
+        msg: >-
+          Triggered by Zuul event {{ zuul.event_id }} for
+          {{ zuul.project.name }} on {{ zuul.branch }} in pipeline
+          {{ zuul.pipeline }}
+
+    - name: Download the announced build
+      debug:
+        msg: "downloading build artifact... {{ item }}%"
+      loop: [10, 25, 40, 55, 70, 85, 100]
+      loop_control:
+        pause: 3
+
+    - name: Run the test suite
+      debug:
+        msg: "{{ item }} ... ok"
+      loop_control:
+        pause: 5
+      loop:
+        - test_kafka_connection
+        - test_message_schema
+        - test_trigger_filter
+        - test_event_roundtrip
+        - test_scheduler_handoff
+        - test_mom_is_proud
+
+    - name: Run the integration test
+      shell: |
+        sleep 10
+        {% if break_it | bool %}
+        echo "test_kafka_end_to_end ... FAILED"
+        echo "AssertionError: expected 'hey mom!' but mom did not answer"
+        exit 1
+        {% else %}
+        echo "test_kafka_end_to_end ... ok"
+        {% endif %}
+
+    - name: Celebrate
+      debug:
+        msg: "hey mom! i ran with kafka! (and all tests passed)"

@@ -1,0 +1,47 @@
+# Every pipeline here is triggered by messages on the Kafka topic
+# "zuul-triggers" (connection "kafka" in zuul.conf).
+
+# A new build was announced: run the checks.
+- pipeline:
+    name: kafka-build
+    description: Runs when Kafka announces a new build.
+    manager: independent
+    precedence: high
+    trigger:
+      kafka:
+        - event: build-requested
+
+# Same jobs, but the build is broken (demo of a failing run).  Message
+# data is not passed to jobs yet, so the failure is selected by routing
+# the event to its own pipeline, where hello-kafka is told to fail.
+- pipeline:
+    name: kafka-build-broken
+    description: Runs when Kafka announces a broken build.
+    manager: independent
+    trigger:
+      kafka:
+        - event: build-broken
+
+# Deployment requests are only acted on for production; anything else
+# (e.g. staging) is filtered out by the trigger and never enqueued.
+- pipeline:
+    name: kafka-deploy
+    description: Runs when Kafka requests a production deployment.
+    manager: independent
+    trigger:
+      kafka:
+        - event: deploy-requested
+          data:
+            environment: production
+
+# A container bundle is ready to test.  Each bundle is its own ref
+# (refs/bundles/<id>), so bundles run side by side, and re-runs of one
+# bundle are tracked separately from the others.  The message data says
+# what to run; see the bundle-dispatch job.
+- pipeline:
+    name: bundle-test
+    description: Tests a container bundle announced on Kafka.
+    manager: independent
+    trigger:
+      kafka:
+        - event: bundle-test

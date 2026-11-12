@@ -1,0 +1,37 @@
+- project:
+    name: test1
+    kafka-build:
+      jobs:
+        - hello-kafka
+        - lint
+        - deploy-preview:
+            dependencies: [hello-kafka]
+    kafka-build-broken:
+      jobs:
+        - hello-kafka:
+            vars:
+              break_it: true
+        - lint
+        - deploy-preview:
+            dependencies: [hello-kafka]
+    kafka-deploy:
+      jobs:
+        - hello-kafka
+        - deploy-production:
+            dependencies: [hello-kafka]
+
+- project:
+    name: bundles
+    bundle-test:
+      jobs:
+        - bundle-dispatch
+        - bundle-networking
+        - bundle-storage
+        - bundle-auth
+        - bundle-api
+        - bundle-upgrade
+        - bundle-rollback
+        - bundle-scale
+        - bundle-security
+        - bundle-logging
+        - bundle-metrics

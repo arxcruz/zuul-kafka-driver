@@ -1,0 +1,5 @@
+# Test dependencies.  The unit tests import Zuul, so they need a Zuul
+# installation; this pins the version the driver was developed against
+# (the same commit devenv/common.sh builds the demo images from).
+zuul @ git+https://opendev.org/zuul/zuul@708e1bb256ed88cb0af47f0169c9a146f1c0103b
+pytest

@@ -1,0 +1,173 @@
+# Zuul + Kafka demo environment for zuul-kafka-driver.
+#
+#   ./deploy.sh          build what's missing and start everything
+#   ./demo.sh            guided presentation
+#   ./clean.sh           remove containers, volumes and images
+#
+# The Zuul base images (localhost/zuul:dev, localhost/zuul-executor:dev) are
+# built natively from Zuul's source by deploy.sh; upstream images are amd64
+# only, and bubblewrap in the executor can't create namespaces under
+# emulation.
+#
+#   http://localhost:8080   demo UI: send Kafka messages, watch jobs
+#   http://localhost:9000   Zuul web
+#   http://localhost:8000   job logs
+
+name: zuul-kafka-demo
+
+x-zuul: &zuul
+  image: localhost/zuul-kafka-dev:latest
+  build:
+    context: ..
+    dockerfile: devenv/Containerfile
+    args:
+      ZUUL_IMAGE: ${ZUUL_IMAGE:-localhost/zuul:dev}
+  restart: on-failure
+  volumes:
+    - ./etc_zuul:/etc/zuul:z
+    - ./wait-for.sh:/usr/local/bin/wait-for.sh:z
+    - git:/srv/git:z
+    - certs:/var/certs:z
+
+services:
+  zk:
+    # Mirror of docker.io/zookeeper
+    image: quay.io/opendevmirror/zookeeper:latest
+    volumes:
+      - ./zoo.cfg:/conf/zoo.cfg:z
+      - certs:/var/certs:z
+    command:
+      - sh
+      - -c
+      - until [ -e /var/certs/keystores/zk.pem ]; do sleep 1; done;
+        exec zkServer.sh start-foreground
+
+  mysql:
+    # Mirror of docker.io/mariadb
+    image: quay.io/opendevmirror/mariadb:latest
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: zuul
+      MYSQL_USER: zuul
+      MYSQL_PASSWORD: secret
+      MYSQL_INITDB_SKIP_TZINFO: 1
+
+  kafka:
+    image: docker.io/apache/kafka:3.9.1
+    ports:
+      - "29092:29092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,HOST://:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,HOST:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+
+  kafka-init:
+    image: docker.io/apache/kafka:3.9.1
+    depends_on: [kafka]
+    restart: on-failure
+    command:
+      - /opt/kafka/bin/kafka-topics.sh
+      - --bootstrap-server=kafka:9092
+      - --create
+      - --if-not-exists
+      - --topic=zuul-triggers
+      - --partitions=1
+      - --replication-factor=1
+
+  init:
+    <<: *zuul
+    restart: "no"
+    volumes:
+      - ./repos:/repos:z
+      - ./init.sh:/usr/local/bin/init.sh:z
+      - ./certs-tools:/certs-tools:z
+      - git:/srv/git:z
+      - certs:/var/certs:z
+    command: ["init.sh"]
+
+  scheduler:
+    <<: *zuul
+    depends_on: [zk, mysql, kafka]
+    command: ["wait-for.sh", "zk:2281", "mysql:3306", "kafka:9092", "--",
+              "zuul-scheduler", "-f"]
+
+  merger:
+    <<: *zuul
+    depends_on: [zk]
+    command: ["wait-for.sh", "zk:2281", "--", "zuul-merger", "-f"]
+
+  executor:
+    <<: *zuul
+    image: localhost/zuul-kafka-executor-dev:latest
+    build:
+      context: ..
+      dockerfile: devenv/Containerfile
+      args:
+        ZUUL_IMAGE: ${ZUUL_EXECUTOR_IMAGE:-localhost/zuul-executor:dev}
+    hostname: executor
+    # Bubblewrap needs to create namespaces.
+    privileged: true
+    depends_on: [zk]
+    volumes:
+      - ./etc_zuul:/etc/zuul:z
+      - ./wait-for.sh:/usr/local/bin/wait-for.sh:z
+      - git:/srv/git:z
+      - certs:/var/certs:z
+      - logs:/srv/static/logs:z
+      - executor-state:/var/lib/zuul
+    command:
+      - wait-for.sh
+      - zk:2281
+      - --
+      - sh
+      - -c
+      - mkdir -p /var/lib/zuul/ssh &&
+        { [ -f /var/lib/zuul/ssh/id_rsa ] ||
+          ssh-keygen -q -t rsa -N '' -f /var/lib/zuul/ssh/id_rsa; } &&
+        exec zuul-executor -f
+
+  web:
+    <<: *zuul
+    depends_on: [zk, mysql]
+    ports:
+      - "9000:9000"
+    command: ["wait-for.sh", "zk:2281", "mysql:3306", "--",
+              "zuul-web", "-f"]
+
+  logs:
+    <<: *zuul
+    restart: on-failure
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./logserver.py:/usr/local/bin/logserver.py:z
+      - logs:/srv/static/logs:z
+    command: ["python3", "/usr/local/bin/logserver.py"]
+
+  demo-ui:
+    <<: *zuul
+    depends_on: [kafka, web]
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      KAFKA_TOPIC: zuul-triggers
+      ZUUL_API: http://web:9000/api/tenant/example-tenant
+    volumes:
+      - ./demo-ui:/srv/demo-ui:z
+    command: ["python3", "/srv/demo-ui/app.py"]
+
+volumes:
+  git:
+  certs:
+  logs:
+  executor-state:

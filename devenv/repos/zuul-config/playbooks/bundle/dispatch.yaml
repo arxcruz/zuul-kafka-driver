@@ -1,0 +1,31 @@
+- hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Read the Kafka message and pick the tests to run
+      command: >-
+        /usr/local/bin/python3 {{ playbook_dir }}/dispatch.py
+        {{ zuul.event_id }} {{ kafka_bootstrap }} {{ zuul_api }}
+        {{ zuul.project.name }} {{ zuul.ref }}
+        {{ zuul.child_jobs | to_json | quote }}
+      register: dispatch
+
+    - name: Decision
+      set_fact:
+        decision: "{{ dispatch.stdout | from_json }}"
+
+    - name: Show the decision
+      debug:
+        msg: "{{ item }}"
+      loop: "{{ decision.report }}"
+      loop_control:
+        label: decision
+
+    # Jobs left out of child_jobs are skipped; the rest of the data is
+    # passed to the bundle tests as variables.
+    - name: Tell Zuul which tests to run
+      zuul_return:
+        data:
+          zuul:
+            child_jobs: "{{ decision.child_jobs }}"
+          bundle_id: "{{ decision.bundle_id }}"
+          flaky: "{{ decision.flaky }}"

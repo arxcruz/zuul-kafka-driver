@@ -1,0 +1,9 @@
+- hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Lint the build
+      debug:
+        msg: "lint {{ item }} ... clean"
+      loop: [kafka.py, zuul.py, mom.py]
+      loop_control:
+        pause: 6

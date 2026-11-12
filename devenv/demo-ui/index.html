@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zuul Kafka Demo</title>
+<style>
+:root {
+  --bg: #f5f6f8; --panel: #ffffff; --ink: #1d2330; --muted: #677087;
+  --line: #e2e5ec; --accent: #3b5bdb; --accent-ink: #ffffff;
+  --ok: #2f9e44; --ok-bg: #e6f6ea; --bad: #e03131; --bad-bg: #fdecec;
+  --run: #1c7ed6; --run-bg: #e7f1fc; --skip: #868e96; --skip-bg: #f1f3f5;
+  --warn: #e8590c; --warn-bg: #fff1e6; --code: #f1f3f7;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #11141b; --panel: #1a1e27; --ink: #e8ebf2; --muted: #98a1b6;
+    --line: #2a303d; --accent: #5c7cfa; --accent-ink: #ffffff;
+    --ok: #51cf66; --ok-bg: #1d3324; --bad: #ff6b6b; --bad-bg: #3a1f22;
+    --run: #4dabf7; --run-bg: #18304a; --skip: #adb5bd; --skip-bg: #262b35;
+    --warn: #ffa94d; --warn-bg: #3a2a1a; --code: #12151c;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+a { color: var(--accent); }
+header { padding: 20px 24px 8px; display: flex; flex-wrap: wrap;
+  align-items: baseline; gap: 8px 20px; }
+header h1 { margin: 0; font-size: 24px; }
+header .sub { color: var(--muted); }
+header nav { margin-left: auto; display: flex; gap: 14px; }
+.flow { display: flex; align-items: center; gap: 8px; padding: 6px 24px 14px;
+  flex-wrap: wrap; color: var(--muted); font-size: 13px; }
+.flow .step { padding: 6px 12px; border: 1px solid var(--line);
+  border-radius: 999px; background: var(--panel); transition: all .3s; }
+.flow .step.lit { background: var(--accent); color: var(--accent-ink);
+  border-color: var(--accent); }
+main { display: grid; grid-template-columns: minmax(300px, 400px) 1fr;
+  gap: 18px; padding: 0 24px 24px; }
+@media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 0 16px 16px; }
+  header, .flow { padding-left: 16px; padding-right: 16px; } }
+section { background: var(--panel); border: 1px solid var(--line);
+  border-radius: 12px; padding: 16px; margin-bottom: 18px; min-width: 0; }
+section h2 { margin: 0 0 12px; font-size: 15px; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--muted); }
+.scenario { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px;
+  align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+.scenario:first-of-type { border-top: 0; padding-top: 0; }
+.scenario .title { font-weight: 600; }
+.scenario .desc { grid-column: 1; color: var(--muted); font-size: 13px; }
+.scenario button { grid-row: 1 / span 2; grid-column: 2; }
+button { font: inherit; font-weight: 600; border: 0; border-radius: 8px;
+  padding: 9px 14px; background: var(--accent); color: var(--accent-ink);
+  cursor: pointer; white-space: nowrap; }
+button:active { transform: translateY(1px); }
+button.ghost { background: transparent; color: var(--accent);
+  border: 1px solid var(--line); }
+textarea { width: 100%; min-height: 110px; font: 13px/1.4 ui-monospace, Menlo, monospace;
+  background: var(--code); color: var(--ink); border: 1px solid var(--line);
+  border-radius: 8px; padding: 10px; resize: vertical; }
+.row { display: flex; gap: 8px; margin-top: 8px; align-items: center; flex-wrap: wrap; }
+input { font: inherit; background: var(--code); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; width: 120px; }
+.feed { list-style: none; margin: 0; padding: 0; max-height: 260px; overflow: auto; }
+.feed li { padding: 8px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.feed li:first-child { border-top: 0; }
+.feed code { display: block; white-space: pre-wrap; word-break: break-all;
+  background: var(--code); padding: 6px 8px; border-radius: 6px; margin-top: 4px; }
+.meta { color: var(--muted); font-size: 12px; }
+.item { border: 1px solid var(--line); border-radius: 10px; padding: 12px;
+  margin-bottom: 12px; }
+.item-head { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline;
+  margin-bottom: 8px; }
+.item-head .pipeline { font-weight: 700; }
+.job { display: grid; grid-template-columns: minmax(120px, 180px) 1fr auto;
+  gap: 12px; align-items: center; padding: 6px 0; }
+.bar { height: 10px; background: var(--skip-bg); border-radius: 999px; overflow: hidden; }
+.bar > div { height: 100%; border-radius: 999px; transition: width 1s linear; }
+.bar.indeterminate > div { width: 30% !important; animation: slide 1.4s infinite ease-in-out; }
+@keyframes slide { 0% { margin-left: -30%; } 100% { margin-left: 100%; } }
+.pill { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 9px;
+  border-radius: 999px; text-transform: uppercase; letter-spacing: .03em; }
+.s-ok { color: var(--ok); background: var(--ok-bg); }
+.s-bad { color: var(--bad); background: var(--bad-bg); }
+.s-run { color: var(--run); background: var(--run-bg); }
+.s-skip { color: var(--skip); background: var(--skip-bg); }
+.s-warn { color: var(--warn); background: var(--warn-bg); }
+.fill-ok { background: var(--ok); } .fill-bad { background: var(--bad); }
+.fill-run { background: var(--run); } .fill-skip { background: var(--skip); }
+.fill-warn { background: var(--warn); }
+.empty { color: var(--muted); padding: 18px 0; text-align: center; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 8px 6px; border-top: 1px solid var(--line); }
+th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase;
+  border-top: 0; }
+.table-wrap { overflow-x: auto; }
+.matrix { border-collapse: separate; border-spacing: 4px; width: auto; }
+.matrix th, .matrix td { border: 0; padding: 0 2px; }
+.matrix th.job-h { height: 96px; vertical-align: bottom; padding-bottom: 4px; }
+.matrix th.job-h span { writing-mode: vertical-rl; transform: rotate(180deg);
+  font-size: 11px; text-transform: none; letter-spacing: 0; }
+.matrix td.bid { padding-right: 10px; white-space: nowrap; }
+.matrix td.acts { padding-left: 10px; white-space: nowrap; }
+.cell { width: 26px; height: 26px; border-radius: 6px; border: 2px solid transparent;
+  cursor: pointer; display: block; padding: 0; }
+.cell.c-SUCCESS { background: var(--ok); }
+.cell.c-FAILURE, .cell.c-TIMED_OUT, .cell.c-POST_FAILURE, .cell.c-NODE_FAILURE { background: var(--bad); }
+.cell.c-RUNNING { background: var(--run); animation: pulse 1.2s infinite ease-in-out; }
+.cell.c-QUEUED { background: var(--run-bg); border-color: var(--run); }
+.cell.c-none { background: var(--skip-bg); border: 2px dashed var(--line); }
+.cell.c-other { background: var(--warn); }
+.cell.sel { outline: 3px solid var(--accent); outline-offset: 2px; }
+@keyframes pulse { 50% { opacity: .45; } }
+button.small { padding: 5px 10px; font-size: 13px; }
+button:disabled { opacity: .4; cursor: default; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend .cell { width: 14px; height: 14px; border-radius: 4px; cursor: default; }
+select { font: inherit; background: var(--code); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+.toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+  background: var(--ink); color: var(--panel); padding: 10px 16px; border-radius: 8px;
+  opacity: 0; transition: opacity .3s; pointer-events: none; max-width: 90vw; }
+.toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Zuul &times; Kafka</h1>
+  <span class="sub">Publish a message to Kafka and watch Zuul run the jobs it triggers</span>
+  <nav>
+    <a href="http://localhost:9000/t/example-tenant/status" target="_blank">Zuul status</a>
+    <a href="http://localhost:9000/t/example-tenant/builds" target="_blank">Zuul builds</a>
+  </nav>
+</header>
+
+<div class="flow" aria-label="Message flow">
+  <span class="step" id="f-kafka">Kafka topic: zuul-triggers</span> &rarr;
+  <span class="step" id="f-driver">Kafka driver in zuul-scheduler</span> &rarr;
+  <span class="step" id="f-pipeline">Pipeline trigger filter</span> &rarr;
+  <span class="step" id="f-exec">zuul-executor runs the jobs</span>
+</div>
+
+<main>
+  <div>
+    <section>
+      <h2>Container bundles</h2>
+      <div class="scenario">
+        <div class="title">Announce a new bundle</div>
+        <div class="desc">A bundle is ready: Kafka gets a message with its ID and Zuul runs all 10 bundle tests.
+          Some fail at random, like a flaky network. Then re-run only the failures from the grid on the right.</div>
+        <button id="bundle-new">Send</button>
+      </div>
+      <div class="row">
+        <label class="meta" for="flaky">network flakiness</label>
+        <select id="flaky">
+          <option value="0">0% (always pass)</option>
+          <option value="0.1">10%</option>
+          <option value="0.3" selected>30%</option>
+          <option value="0.5">50%</option>
+        </select>
+      </div>
+    </section>
+    <section>
+      <h2>Send a message</h2>
+      <div id="scenarios"></div>
+    </section>
+    <section>
+      <h2>Custom message</h2>
+      <textarea id="custom" spellcheck="false">{
+  "project": "test1",
+  "event": "build-requested",
+  "data": {"build_id": "build-from-the-audience"}
+}</textarea>
+      <div class="row">
+        <label class="meta" for="custom-key">key</label>
+        <input id="custom-key" value="custom">
+        <button id="send-custom">Send</button>
+      </div>
+    </section>
+    <section>
+      <h2>Messages sent</h2>
+      <ul class="feed" id="sent"><li class="empty">Nothing sent yet</li></ul>
+    </section>
+  </div>
+
+  <div>
+    <section>
+      <h2>Bundles</h2>
+      <div class="table-wrap" id="bundles"><div class="empty">Loading&hellip;</div></div>
+      <div class="legend meta">
+        <span><i class="cell c-SUCCESS"></i>passed</span>
+        <span><i class="cell c-FAILURE"></i>failed</span>
+        <span><i class="cell c-RUNNING"></i>running</span>
+        <span><i class="cell c-QUEUED"></i>queued</span>
+        <span><i class="cell c-none"></i>never ran</span>
+        <span>Click squares to pick jobs for &ldquo;Run selected&rdquo;.</span>
+      </div>
+    </section>
+    <section>
+      <h2>Running now</h2>
+      <div id="status"><div class="empty">Loading&hellip;</div></div>
+    </section>
+    <section>
+      <h2>Recent builds</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Result</th><th>Job</th><th>Pipeline</th><th>Duration</th><th>Started</th><th></th></tr></thead>
+        <tbody id="builds"><tr><td colspan="6" class="empty">Loading&hellip;</td></tr></tbody>
+      </table></div>
+    </section>
+  </div>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+const ZUUL = 'http://localhost:9000/t/example-tenant';
+const SCENARIOS = [
+  ['build', 'New build announced', 'event build-requested → kafka-build: hello-kafka, lint, then deploy-preview. Everything passes.'],
+  ['broken', 'Broken build announced', 'event build-broken → kafka-build-broken: hello-kafka fails, so deploy-preview is skipped.'],
+  ['production', 'Deploy to production', 'event deploy-requested with data.environment = production → kafka-deploy.'],
+  ['staging', 'Deploy to staging', 'Same event with data.environment = staging. The trigger filter drops it, so nothing runs.'],
+  ['unknown-project', 'Unknown project', 'Valid message for a project Zuul does not know. Logged and skipped.'],
+  ['garbage', 'Garbage message', 'Not JSON at all. Logged and skipped; the consumer keeps going.'],
+];
+
+const esc = s => String(s ?? '').replace(/[&<>"']/g,
+  c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+const fmtDur = s => s == null ? '' : s < 60 ? `${Math.round(s)}s`
+  : `${Math.floor(s / 60)}m ${String(Math.round(s % 60)).padStart(2, '0')}s`;
+const fmtTime = t => t ? new Date(typeof t === 'number' ? t * 1000 : t + (String(t).endsWith('Z') ? '' : 'Z'))
+  .toLocaleTimeString() : '';
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+function pulseFlow() {
+  const ids = ['f-kafka', 'f-driver', 'f-pipeline', 'f-exec'];
+  ids.forEach((id, i) => setTimeout(() => {
+    document.getElementById(id).classList.add('lit');
+    setTimeout(() => document.getElementById(id).classList.remove('lit'), 900);
+  }, i * 450));
+}
+
+async function send(body) {
+  const r = await fetch('/api/send', {method: 'POST', body: JSON.stringify(body)});
+  const res = await r.json();
+  if (res.error) { toast('Error: ' + res.error); return; }
+  toast(`Published to ${res.topic} partition ${res.partition}, offset ${res.offset}`);
+  pulseFlow();
+  loadSent(); setTimeout(loadStatus, 1500);
+}
+
+function renderScenarios() {
+  document.getElementById('scenarios').innerHTML = SCENARIOS.map(([id, title, desc]) => `
+    <div class="scenario">
+      <div class="title">${esc(title)}</div>
+      <div class="desc">${esc(desc)}</div>
+      <button data-scenario="${id}">Send</button>
+    </div>`).join('');
+  document.querySelectorAll('[data-scenario]').forEach(b =>
+    b.addEventListener('click', () => send({scenario: b.dataset.scenario})));
+}
+
+document.getElementById('send-custom').addEventListener('click', () => {
+  const raw = document.getElementById('custom').value;
+  let value = raw;
+  try { value = JSON.parse(raw); } catch (e) { /* send as plain text */ }
+  send({key: document.getElementById('custom-key').value, value});
+});
+
+async function loadSent() {
+  const sent = await (await fetch('/api/sent')).json();
+  document.getElementById('sent').innerHTML = sent.length ? sent.map(m => `
+    <li><span class="meta">${fmtTime(m.time)} · key ${esc(m.key)} · offset ${esc(m.offset)}</span>
+    <code>${esc(m.value)}</code></li>`).join('') : '<li class="empty">Nothing sent yet</li>';
+}
+
+function jobState(j) {
+  if (j.result) {
+    const r = j.result.toUpperCase();
+    if (r === 'SUCCESS') return ['s-ok', 'fill-ok', 'passed'];
+    if (r === 'SKIPPED') return ['s-skip', 'fill-skip', 'skipped'];
+    if (['FAILURE', 'POST_FAILURE', 'TIMED_OUT', 'NODE_FAILURE'].includes(r)) return ['s-bad', 'fill-bad', r.toLowerCase().replace('_', ' ')];
+    return ['s-warn', 'fill-warn', r.toLowerCase()];
+  }
+  if (j.started) return ['s-run', 'fill-run', 'running'];
+  return ['s-skip', 'fill-skip', j.waiting ? 'waiting' : 'queued'];
+}
+
+async function loadStatus() {
+  const el = document.getElementById('status');
+  try {
+    const items = await (await fetch('/api/status')).json();
+    if (items.error) throw new Error(items.error);
+    if (!items.length) { el.innerHTML = '<div class="empty">Nothing running. Send a message!</div>'; return; }
+    el.innerHTML = items.map(it => `
+      <div class="item">
+        <div class="item-head">
+          <span class="pipeline">${esc(it.pipeline)}</span>
+          <span class="meta">${esc(it.project)} · ${esc(it.ref)} · enqueued ${fmtTime(it.enqueue_time / 1000)}</span>
+        </div>
+        ${it.jobs.map(j => {
+          const [pill, fill, label] = jobState(j);
+          let pct = j.result ? 100 : 0, indet = false;
+          if (!j.result && j.started) {
+            if (j.estimated && j.elapsed != null) pct = Math.min(99, j.elapsed / 10 / j.estimated);
+            else indet = true;
+          }
+          const name = j.uuid && j.started
+            ? `<a href="${ZUUL}/stream/${esc(j.uuid)}?logfile=console.log" target="_blank">${esc(j.name)}</a>`
+            : esc(j.name);
+          return `<div class="job">
+            <div>${name}</div>
+            <div class="bar ${indet ? 'indeterminate' : ''}"><div class="${fill}" style="width:${pct}%"></div></div>
+            <div><span class="pill ${pill}">${esc(label)}</span>
+              <span class="meta">${j.elapsed ? fmtDur(j.elapsed / 1000) : ''}</span></div>
+          </div>`;
+        }).join('')}
+      </div>`).join('');
+  } catch (e) {
+    el.innerHTML = `<div class="empty">Waiting for Zuul… (${esc(e.message)})</div>`;
+  }
+}
+
+async function loadBuilds() {
+  const el = document.getElementById('builds');
+  try {
+    const builds = await (await fetch('/api/builds')).json();
+    if (builds.error) throw new Error(builds.error);
+    el.innerHTML = builds.length ? builds.map(b => {
+      const [pill, , label] = jobState({result: b.result || null, started: true});
+      return `<tr>
+        <td><span class="pill ${pill}">${esc(label)}</span></td>
+        <td><a href="${ZUUL}/build/${esc(b.uuid)}" target="_blank">${esc(b.job_name)}</a></td>
+        <td>${esc(b.pipeline)}</td>
+        <td>${fmtDur(b.duration)}</td>
+        <td class="meta">${fmtTime(b.start_time)}</td>
+        <td>${b.log_url ? `<a href="${esc(b.log_url)}job-output.txt" target="_blank">log</a>` : ''}</td>
+      </tr>`;
+    }).join('') : '<tr><td colspan="6" class="empty">No builds yet</td></tr>';
+  } catch (e) {
+    el.innerHTML = `<tr><td colspan="6" class="empty">Waiting for Zuul… (${esc(e.message)})</td></tr>`;
+  }
+}
+
+// Bundles: one row per bundle, one square per job (its latest verdict).
+const selected = {};  // bundle id -> Set of job names
+
+async function sendBundle(body) {
+  body.flaky = document.getElementById('flaky').value;
+  const r = await fetch('/api/bundle', {method: 'POST', body: JSON.stringify(body)});
+  const res = await r.json();
+  if (res.error) { toast(res.error); return; }
+  toast(`Bundle message published (key ${res.key}, offset ${res.offset})`);
+  pulseFlow();
+  if (body.bundle_id) delete selected[body.bundle_id];
+  loadSent(); setTimeout(loadBundles, 1500); setTimeout(loadStatus, 1500);
+}
+
+document.getElementById('bundle-new').addEventListener('click',
+  () => sendBundle({action: 'new'}));
+
+const FAILED = ['FAILURE', 'TIMED_OUT', 'POST_FAILURE', 'NODE_FAILURE'];
+const CELL = ['SUCCESS', 'RUNNING', 'QUEUED', ...FAILED];
+
+async function loadBundles() {
+  const el = document.getElementById('bundles');
+  try {
+    const d = await (await fetch('/api/bundles')).json();
+    if (d.error) throw new Error(d.error);
+    if (!d.bundles.length) { el.innerHTML = '<div class="empty">No bundles yet. Announce one!</div>'; return; }
+    const head = `<tr><th></th>${d.jobs.map(j =>
+      `<th class="job-h"><span>${esc(j.replace(/^bundle-/, ''))}</span></th>`).join('')}<th></th></tr>`;
+    const rows = d.bundles.map(b => {
+      const sel = selected[b.id] || new Set();
+      const failed = d.jobs.filter(j => !b.jobs[j] || b.jobs[j].state !== 'SUCCESS').length;
+      const cells = d.jobs.map(j => {
+        const st = b.jobs[j] ? b.jobs[j].state : null;
+        const cls = st ? (CELL.includes(st) ? 'c-' + st : 'c-other') : 'c-none';
+        return `<td><button class="cell ${cls} ${sel.has(j) ? 'sel' : ''}" data-b="${esc(b.id)}" data-j="${esc(j)}"
+          title="${esc(j)}: ${esc(st ? st.toLowerCase() : 'never ran')}"></button></td>`;
+      }).join('');
+      const dis = b.busy ? 'disabled' : '';
+      return `<tr>
+        <td class="bid"><b>${esc(b.id)}</b><div class="meta">${b.busy ? 'running' : `${b.runs} run${b.runs === 1 ? '' : 's'}`}</div></td>
+        ${cells}
+        <td class="acts">
+          <button class="small" data-act="failed" data-b="${esc(b.id)}" ${dis || (failed ? '' : 'disabled')}>Re-run failed (${failed})</button>
+          <button class="small ghost" data-act="all" data-b="${esc(b.id)}" ${dis}>Re-run all</button>
+          <button class="small ghost" data-act="selected" data-b="${esc(b.id)}" ${dis || (sel.size ? '' : 'disabled')}>Run selected (${sel.size})</button>
+        </td></tr>`;
+    }).join('');
+    el.innerHTML = `<table class="matrix"><thead>${head}</thead><tbody>${rows}</tbody></table>`;
+  } catch (e) {
+    el.innerHTML = `<div class="empty">Waiting for Zuul… (${esc(e.message)})</div>`;
+  }
+}
+
+document.getElementById('bundles').addEventListener('click', e => {
+  const cell = e.target.closest('.cell');
+  if (cell) {
+    const s = selected[cell.dataset.b] = selected[cell.dataset.b] || new Set();
+    s.has(cell.dataset.j) ? s.delete(cell.dataset.j) : s.add(cell.dataset.j);
+    loadBundles();
+    return;
+  }
+  const btn = e.target.closest('[data-act]');
+  if (!btn || btn.disabled) return;
+  const body = {action: btn.dataset.act, bundle_id: btn.dataset.b};
+  if (body.action === 'selected') body.jobs = [...(selected[btn.dataset.b] || [])];
+  sendBundle(body);
+});
+
+renderScenarios(); loadSent(); loadStatus(); loadBuilds(); loadBundles();
+setInterval(loadBundles, 2500);
+setInterval(loadStatus, 2000);
+setInterval(loadBuilds, 4000);
+setInterval(loadSent, 5000);
+</script>
+</body>
+</html>

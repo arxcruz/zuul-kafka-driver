@@ -1,0 +1,16 @@
+- hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Deploy to {{ environment_name }}
+      debug:
+        msg: "{{ item }}... done"
+      loop:
+        - "rolling out to {{ environment_name }}"
+        - waiting for health checks
+        - switching traffic
+      loop_control:
+        pause: 6
+
+    - name: Done
+      debug:
+        msg: "hey mom! i'm on {{ environment_name }} now!"

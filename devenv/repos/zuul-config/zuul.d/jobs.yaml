@@ -1,0 +1,69 @@
+# All jobs run their playbooks on the executor itself (no nodes), which
+# is allowed because they are defined in this trusted config project.
+
+- job:
+    name: base
+    parent: null
+    description: Base job; publishes the job logs to the demo log server.
+    nodeset:
+      nodes: []
+    timeout: 600
+    post-run: playbooks/base/post-logs.yaml
+
+- job:
+    name: hello-kafka
+    description: Says hi to mom and pretends to test the announced build.
+    run: playbooks/hello-kafka.yaml
+    vars:
+      break_it: false
+
+- job:
+    name: lint
+    description: A quick check that runs alongside hello-kafka.
+    run: playbooks/lint.yaml
+
+- job:
+    name: deploy-preview
+    description: Deploys a preview once hello-kafka has passed.
+    run: playbooks/deploy.yaml
+    vars:
+      environment_name: preview
+
+- job:
+    name: deploy-production
+    description: Deploys to production once hello-kafka has passed.
+    run: playbooks/deploy.yaml
+    vars:
+      environment_name: production
+
+# Bundle testing.  bundle-dispatch runs first, reads the Kafka message
+# and picks which of the bundle-* jobs run (all of them, only the ones
+# that failed last time, or an explicit list); the others are skipped.
+
+- job:
+    name: bundle-dispatch
+    description: Reads the Kafka message and selects the bundle tests to run.
+    run: playbooks/bundle/dispatch.yaml
+    vars:
+      kafka_bootstrap: kafka:9092
+      zuul_api: http://web:9000/api/tenant/example-tenant
+
+- job:
+    name: bundle-test-base
+    abstract: true
+    description: Tests the bundle; fails at random like a flaky network.
+    run: playbooks/bundle/test.yaml
+    dependencies: [bundle-dispatch]
+    vars:
+      steps: 4
+
+- job: {name: bundle-networking, parent: bundle-test-base, vars: {steps: 6}}
+- job: {name: bundle-storage, parent: bundle-test-base, vars: {steps: 5}}
+- job: {name: bundle-auth, parent: bundle-test-base}
+- job: {name: bundle-api, parent: bundle-test-base, vars: {steps: 5}}
+- job: {name: bundle-upgrade, parent: bundle-test-base, vars: {steps: 7}}
+- job: {name: bundle-rollback, parent: bundle-test-base, vars: {steps: 6}}
+- job: {name: bundle-scale, parent: bundle-test-base, vars: {steps: 7}}
+- job: {name: bundle-security, parent: bundle-test-base}
+- job: {name: bundle-logging, parent: bundle-test-base, vars: {steps: 3}}
+- job: {name: bundle-metrics, parent: bundle-test-base, vars: {steps: 3}}

@@ -1,0 +1,1 @@
+import zuul_kafka._hook; zuul_kafka._hook.install()

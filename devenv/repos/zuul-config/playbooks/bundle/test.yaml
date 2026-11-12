@@ -1,0 +1,23 @@
+- hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Test bundle {{ bundle_id }}
+      debug:
+        msg: "{{ zuul.job }}: step {{ item }} of {{ steps }} on bundle {{ bundle_id }} ... ok"
+      loop: "{{ range(1, steps | int + 1) | list }}"
+      loop_control:
+        pause: 4
+
+    - name: Talk to the bundle over the network
+      shell: |
+        sleep 3
+        {% if (100 | random) < (flaky | float * 100) %}
+        echo "curl: (7) Failed to connect to {{ bundle_id }}.bundles.local port 443: Network is unreachable"
+        exit 1
+        {% else %}
+        echo "{{ bundle_id }}.bundles.local answered: 200 OK"
+        {% endif %}
+
+    - name: Done
+      debug:
+        msg: "{{ zuul.job }} passed on bundle {{ bundle_id }}"

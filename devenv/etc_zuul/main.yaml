@@ -1,0 +1,9 @@
+- tenant:
+    name: example-tenant
+    source:
+      git:
+        config-projects:
+          - zuul-config
+        untrusted-projects:
+          - test1
+          - bundles

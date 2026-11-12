@@ -1,0 +1,19 @@
+# Copy the job logs to the directory served by the demo log server and
+# tell Zuul where to find them.  A real deployment would use the
+# upload-logs roles from zuul-jobs instead.
+- hosts: localhost
+  gather_facts: false
+  vars:
+    log_dest: "/srv/static/logs/{{ zuul.build }}"
+  tasks:
+    - name: Publish logs
+      shell: |
+        mkdir -p {{ log_dest }}
+        cp -a {{ zuul.executor.log_root }}/. {{ log_dest }}/
+        python3 {{ playbook_dir }}/manifest.py {{ log_dest }}
+
+    - name: Report the log URL
+      zuul_return:
+        data:
+          zuul:
+            log_url: "http://localhost:8000/{{ zuul.build }}/"

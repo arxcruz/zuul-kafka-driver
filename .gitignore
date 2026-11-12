@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.egg-info/
+build/
+dist/
+
+# Not part of the repository
+.DS_Store
+.pytest_cache/
+presentation/
+blog/
