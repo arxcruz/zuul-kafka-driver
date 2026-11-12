@@ -2,6 +2,7 @@
 #
 #   ./deploy.sh          build what's missing and start everything
 #   ./demo.sh            guided presentation
+#   ./stop.sh            stop everything, keep data; ./deploy.sh starts it again
 #   ./clean.sh           remove containers, volumes and images
 #
 # The Zuul base images (localhost/zuul:dev, localhost/zuul-executor:dev) are

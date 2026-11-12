@@ -51,6 +51,8 @@ The demo is also reachable from **other computers on the same network**, which i
 
 ```sh
 ./demo.sh                  # guided walkthrough in the terminal (for presentations)
+./stop.sh                  # pause: stop everything (and the podman machine), keep all data
+./deploy.sh                # start again (~20 s), with build history intact
 ./clean.sh                 # remove containers, volumes, images and the Zuul source
 ./clean.sh --keep-images   # same, but keep the images for a fast redeploy
 ```

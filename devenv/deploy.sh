@@ -15,8 +15,9 @@ ensure_zuul_images
 # build log links that work from other computers.
 printf 'demo_host: %s\n' "$DEMO_HOST" > etc_zuul/site-variables.yaml
 say "Starting the containers..."
+started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 compose up -d --build >/dev/null
-wait_ready
+wait_ready "$started"
 
 printf '\n'
 say "${B}Demo UI${R}    $UI      send Kafka messages, watch jobs"
@@ -31,7 +32,7 @@ if [ "$DEMO_HOST" != localhost ]; then
     say "  Job logs  http://$DEMO_HOST:8000"
 fi
 printf '\n'
-say "Guided walkthrough: ./demo.sh    Remove everything: ./clean.sh"
+say "Guided walkthrough: ./demo.sh    Pause: ./stop.sh    Remove everything: ./clean.sh"
 
 if [ "${1:-}" = "--open" ]; then
     open "$UI" 2>/dev/null || xdg-open "$UI" 2>/dev/null || true

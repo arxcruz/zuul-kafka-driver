@@ -63,8 +63,6 @@ container() { echo "${PROJECT}_$1_1"; }
 ensure_podman() {
     command -v podman >/dev/null ||
         die "podman is not installed (macOS: brew install podman podman-compose)"
-    podman compose version >/dev/null 2>&1 ||
-        die "podman compose is not available (macOS: brew install podman-compose)"
     if ! podman info >/dev/null 2>&1; then
         if podman machine list --format '{{.Name}}' 2>/dev/null | grep -q .; then
             say "Starting the podman machine..."
@@ -74,6 +72,9 @@ ensure_podman() {
             podman machine init --cpus 4 --memory 8192 --disk-size 60 --now
         fi
     fi
+    # Checked after the machine is up: "podman compose" needs it running.
+    podman compose version >/dev/null 2>&1 ||
+        die "podman compose is not available (macOS: brew install podman-compose)"
 }
 
 # Build localhost/zuul:dev and localhost/zuul-executor:dev with Zuul's own
@@ -94,14 +95,25 @@ ensure_zuul_images() {
     podman build --target zuul -t localhost/zuul:dev "$ZUUL_SRC"
 }
 
+# After a restart Kafka may still be rebalancing the "zuul" consumer group,
+# and messages wait until it settles; don't report ready before that.
+consumer_group_stable() {
+    podman exec "$(container kafka)" /opt/kafka/bin/kafka-consumer-groups.sh \
+        --bootstrap-server kafka:9092 --describe --group zuul --state 2>/dev/null |
+        grep -q Stable
+}
+
 wait_ready() {
+    # A restarted container keeps its old logs, so only look at new lines.
+    local since=$1
     printf '  Waiting for Zuul to start'
     for _ in $(seq 1 150); do
-        if podman logs "$(container scheduler)" 2>&1 |
+        if podman logs --since "$since" "$(container scheduler)" 2>&1 |
                grep -q "Subscribed to Kafka topics" &&
            curl -sf http://localhost:9000/api/components 2>/dev/null |
                grep -q '"executor": *\[{[^]]*"state": *"running"' &&
-           curl -sf "$UI/api/status" >/dev/null 2>&1; then
+           curl -sf "$UI/api/status" >/dev/null 2>&1 &&
+           consumer_group_stable; then
             printf '\n'; ok "Zuul is up and subscribed to Kafka"; return
         fi
         printf '.'; sleep 4
